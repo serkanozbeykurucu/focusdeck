@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Prisma
+api/prisma/*.db
+api/prisma/*.db-journal
+
+# Uploads
+api/uploads/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Simulation outputs (keep folder, ignore generated)
+simulation/results/*.csv
+simulation/results/*.png
+simulation/results/*.pdf
+!simulation/results/.gitkeep
+
+# Coverage / test
+coverage/
+.nyc_output/
+
+# Misc
+*.local
+.cache/
+
+# docs
+docs

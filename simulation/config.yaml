@@ -1,0 +1,14 @@
+seed: 42
+n_learners: 10
+n_days: 100
+n_cards: 100
+new_cards_per_day: 5
+algorithms:
+  - sm2
+  - random_baseline
+# Slight per-learner variation ranges
+stability_start_mean: 1.0
+stability_start_std: 0.15
+growth_rate_mean: 1.0
+growth_rate_std: 0.1
+results_dir: results

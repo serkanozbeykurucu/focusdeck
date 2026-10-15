@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PromptStrategy {
+  ZERO_SHOT
+  FEW_SHOT
+  BLOOM_BASED
+}
+
+enum BloomLevel {
+  REMEMBERING
+  UNDERSTANDING
+  APPLYING
+  ANALYZING
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime       @default(now())
+  documents    Document[]
+  reviews      Review[]
+  sessions     StudySession[]
+
+  @@index([email])
+}
+
+model Document {
+  id               String      @id @default(uuid())
+  userId           String
+  title            String
+  originalFilename String
+  extractedText    String      @db.Text
+  wordCount        Int
+  uploadedAt       DateTime    @default(now())
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcards       Flashcard[]
+
+  @@index([userId])
+}
+
+model Flashcard {
+  id             String         @id @default(uuid())
+  documentId     String
+  question       String         @db.Text
+  answer         String         @db.Text
+  promptStrategy PromptStrategy
+  bloomLevel     BloomLevel?
+  easeFactor     Float          @default(2.5)
+  interval       Int            @default(1)
+  repetitions    Int            @default(0)
+  nextReviewAt   DateTime       @default(now())
+  lastReviewedAt DateTime?
+  createdAt      DateTime       @default(now())
+  document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reviews        Review[]
+
+  @@index([documentId])
+  @@index([nextReviewAt])
+}
+
+model Review {
+  id                 String        @id @default(uuid())
+  flashcardId        String
+  userId             String
+  quality            Int
+  reviewedAt         DateTime      @default(now())
+  previousInterval   Int
+  newInterval        Int
+  previousEaseFactor Float
+  newEaseFactor      Float
+  sessionId          String?
+  flashcard          Flashcard     @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session            StudySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([flashcardId])
+  @@index([sessionId])
+  @@index([reviewedAt])
+}
+
+model StudySession {
+  id              String    @id @default(uuid())
+  userId          String
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  pomodoroEnabled Boolean   @default(false)
+  pomodoroMinutes Int       @default(25)
+  cardsReviewed   Int       @default(0)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviews         Review[]
+
+  @@index([userId])
+}
