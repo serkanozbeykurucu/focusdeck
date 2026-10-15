@@ -59,34 +59,98 @@ export function parseFlashcardResponse(raw: string): GeneratedCard[] {
   return cards;
 }
 
-async function callGemini(prompt: string): Promise<string> {
-  if (!config.geminiApiKey) {
-    throw new Error('GEMINI_API_KEY is not configured');
-  }
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+function classifyGeminiError(message: string): 'rate' | 'unavailable' | 'not_found' | 'other' {
+  if (/\b429\b/.test(message) || /quota|resource.?exhausted|rate.?limit|too many requests/i.test(message)) {
+    return 'rate';
+  }
+  if (/\b503\b/.test(message) || /high demand|unavailable|try again later/i.test(message)) {
+    return 'unavailable';
+  }
+  if (/\b404\b/.test(message) || /no longer available|not found/i.test(message)) {
+    return 'not_found';
+  }
+  return 'other';
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`[503] Timeout after ${ms}ms waiting for ${label} (high demand / slow)`)),
+          ms
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function callGeminiOnce(prompt: string, modelName: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(config.geminiApiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: modelName,
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 4096,
     },
   });
 
-  try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    if (!text?.trim()) {
-      throw new Error('Empty response from Gemini');
-    }
-    return text;
-  } catch (err) {
-    const message = (err as Error).message ?? String(err);
-    if (message.includes('429') || message.toLowerCase().includes('rate')) {
-      throw new Error('Gemini rate limit exceeded. Please try again shortly.');
-    }
-    throw new Error(`Gemini request failed: ${message}`);
+  const timeoutMs = modelName.includes('lite') ? 20_000 : 35_000;
+  const result = await withTimeout(model.generateContent(prompt), timeoutMs, modelName);
+  const text = result.response.text();
+  if (!text?.trim()) {
+    throw new Error('Empty response from Gemini');
   }
+  return text;
+}
+
+async function callGemini(prompt: string): Promise<string> {
+  if (!config.geminiApiKey) {
+    throw new Error('GEMINI_API_KEY is not configured');
+  }
+
+  const models = config.geminiModels.length > 0 ? config.geminiModels : ['gemini-3.8-flash'];
+  const errors: string[] = [];
+
+  for (const modelName of models) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`[gemini] model=${modelName} attempt=${attempt}`);
+        return await callGeminiOnce(prompt, modelName);
+      } catch (err) {
+        const message = (err as Error).message ?? String(err);
+        console.error(`[gemini] ${modelName} attempt ${attempt}:`, message);
+        const kind = classifyGeminiError(message);
+        errors.push(`${modelName}#${attempt}: ${message}`);
+
+        if (kind === 'rate') {
+          throw new Error(
+            `Gemini rate/quota limit hit. Wait a minute and retry. Details: ${message}`
+          );
+        }
+
+        if (kind === 'unavailable' && attempt < 3) {
+          const waitMs = attempt * 2000;
+          console.log(`[gemini] 503 high demand — waiting ${waitMs}ms before retry`);
+          await sleep(waitMs);
+          continue;
+        }
+        break;
+      }
+    }
+  }
+
+  throw new Error(
+    `Gemini request failed after trying models [${models.join(', ')}]. Last errors: ${errors.slice(-3).join(' | ')}`
+  );
 }
 
 export async function generateFlashcards(

@@ -17,6 +17,10 @@ export const config = {
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
   jwtSecret: required('JWT_SECRET'),
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
+  geminiModels: (process.env.GEMINI_MODEL ?? 'gemini-3.5-flash-lite,gemini-3.8-flash,gemini-flash-latest')
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   uploadDir: process.env.UPLOAD_DIR ?? './uploads',
   jwtExpiresIn: '7d' as const,

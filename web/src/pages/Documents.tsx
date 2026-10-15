@@ -22,6 +22,7 @@ export function Documents() {
   const [strategy, setStrategy] = useState<PromptStrategy>('ZERO_SHOT');
   const [generating, setGenerating] = useState(false);
   const [genMessage, setGenMessage] = useState('');
+  const [genSuccess, setGenSuccess] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -54,12 +55,15 @@ export function Documents() {
     if (!genDoc) return;
     setGenerating(true);
     setGenMessage('');
+    setGenSuccess(false);
     try {
       const { data } = await documentsApi.generateFlashcards(genDoc.id, strategy, 10);
       setGenMessage(`Generated ${data.count} flashcards.`);
+      setGenSuccess(true);
       await load();
     } catch (err) {
       setGenMessage(err instanceof Error ? err.message : 'Generation failed');
+      setGenSuccess(false);
     } finally {
       setGenerating(false);
     }
@@ -100,7 +104,14 @@ export function Documents() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => { setGenDoc(doc); setGenMessage(''); }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setGenDoc(doc);
+                    setGenMessage('');
+                    setGenSuccess(false);
+                  }}
+                >
                   <Sparkles size={16} />
                   Generate flashcards
                 </Button>
@@ -139,14 +150,31 @@ export function Documents() {
             </option>
           ))}
         </select>
-        {genMessage && <p className="mb-3 text-sm text-ink">{genMessage}</p>}
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setGenDoc(null)} disabled={generating}>
-            Close
-          </Button>
-          <Button onClick={() => void onGenerate()} disabled={generating}>
-            {generating ? 'Generating…' : 'Generate 10'}
-          </Button>
+        {genMessage && (
+          <p className={`mb-3 text-sm ${genSuccess ? 'text-accent-dark' : 'text-red-600'}`}>
+            {genMessage}
+          </p>
+        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          {genSuccess && genDoc ? (
+            <>
+              <Button variant="secondary" onClick={() => setGenDoc(null)}>
+                Done
+              </Button>
+              <Link to={`/study/${genDoc.id}`} onClick={() => setGenDoc(null)}>
+                <Button>Study now</Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={() => setGenDoc(null)} disabled={generating}>
+                Close
+              </Button>
+              <Button onClick={() => void onGenerate()} disabled={generating}>
+                {generating ? 'Generating…' : 'Generate 10'}
+              </Button>
+            </>
+          )}
         </div>
       </Modal>
     </PageContainer>
